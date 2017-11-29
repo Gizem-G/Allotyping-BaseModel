@@ -3,9 +3,10 @@ library(reshape2)
 library(caret)
 library(kernlab)
 library(RSQLite)
+library(rPython)
 
 
-#hallo
+#Load sqlite db as dataframe
 options(stringsAsFactors = F)
 con = dbConnect(SQLite(), dbname='Projects/TumorSequencing/DB/TueDB.sqlite')
 myQuery <- dbSendQuery(con, "SELECT * FROM Class1")
@@ -41,13 +42,15 @@ df['Sequence']<-sapply(df['Sequence'], toupper)
 
 
 ###Define Allotypes to differenciate
+allele_count_threshold<-9
+
 A_Allotypes=unique(c(df$HLA_A1,df$HLA_A2))
 HLA_A_allotype_sample_count<-data.frame(table(data.frame(cbind(c(df$Patient..Donor,df$Patient..Donor),c(df$HLA_A1,df$HLA_A2)))))
 HLA_A_allotype_count=list()
 for (allele in A_Allotypes) {
   HLA_A_allotype_count[[allele]]<-length(HLA_A_allotype_sample_count[which(HLA_A_allotype_sample_count$X2==allele & !HLA_A_allotype_sample_count$Freq==0),]$Freq)
 }
-A_Allotypes<-names(which(HLA_A_allotype_count>9))
+A_Allotypes<-names(which(HLA_A_allotype_count>allele_count_threshold))
 
 HLA_B_allotype_sample_count<-data.frame(table(data.frame(cbind(c(df$Patient..Donor,df$Patient..Donor),c(df$HLA_B1,df$HLA_B2)))))
 B_Allotypes=unique(c(df$HLA_B1,df$HLA_B2))
@@ -55,7 +58,7 @@ HLA_B_allotype_count=list()
 for (allele in B_Allotypes) {
   HLA_B_allotype_count[[allele]]<-length(HLA_B_allotype_sample_count[which(HLA_B_allotype_sample_count$X2==allele & !HLA_B_allotype_sample_count$Freq==0),]$Freq)
 }
-B_Allotypes<-names(which(HLA_B_allotype_count>9))
+B_Allotypes<-names(which(HLA_B_allotype_count>allele_count_threshold))
 
 HLA_C_allotype_sample_count<-data.frame(table(data.frame(cbind(c(df$Patient..Donor,df$Patient..Donor),c(df$HLA_C1,df$HLA_C2)))))
 C_Allotypes=unique(c(df$HLA_C1,df$HLA_C2))
@@ -63,18 +66,20 @@ HLA_C_allotype_count=list()
 for (allele in C_Allotypes) {
   HLA_C_allotype_count[[allele]]<-length(HLA_C_allotype_sample_count[which(HLA_C_allotype_sample_count$X2==allele & !HLA_C_allotype_sample_count$Freq==0),]$Freq)
 }
-C_Allotypes<-names(which(HLA_C_allotype_count>9))
+C_Allotypes<-names(which(HLA_C_allotype_count>allele_count_threshold))
 
 All_Allotypes<-c(A_Allotypes,B_Allotypes,C_Allotypes)
 All_Allotypes_count<-c(unlist(HLA_A_allotype_count),unlist(HLA_B_allotype_count),unlist(HLA_C_allotype_count))
 
 ###Generate Data_Matrix (Rows SampleID, Columns Peptides, Fill by Counts), Multilabel matrix (Rows SampleID, Columns HLA Types, Fill binary)
+peptide_count_threshold <- 9
+
 Sequences_list<-list()
 Typing_list<-list()
 total_sample_count=table(df['Dignity'])
 HLA_molten=melt(df,id='Dignity',measure.vars=c('HLA_A1','HLA_A2','HLA_B1','HLA_B2','HLA_C1','HLA_C2'))
 total_peptide_count<-table(df['Sequence'])
-total_peptide_count<-total_peptide_count[which(total_peptide_count>9)]
+total_peptide_count<-total_peptide_count[which(total_peptide_count>peptide_count_threshold)]
 
 ###initialize zeros data_matrix: peptides x samples
 data_matrix=data.frame(matrix(0, ncol = length(total_peptide_count), nrow= length(total_sample_count)))
@@ -106,6 +111,10 @@ data_matrix=data_matrix[shuffle,]
 label_matrix=label_matrix[shuffle,]
 flds<-createFolds(label_matrix$A01, k = 10, list = TRUE, returnTrain = FALSE)
 peptides_perc_list <- list()
+auc_list <- list()
+
+percentage_threshold <- 0.95
+top_n_threshold <- 10
 
 for (fld in names(flds)){
   print(fld)
@@ -119,11 +128,20 @@ for (fld in names(flds)){
     p_counts=colSums(data_fold[p_rows,])
     n_counts=colSums(data_fold[n_rows,])
     perc=p_counts/all_counts
-    peptides=names(perc[which(perc>0.95)])  ### select peptides based on percentage of finding in positive and negative class
-    #### missing select top 10 ####
-    # based on -> fold peptide count, percentage, ..?
-    peptides <- names(sort(all_counts[peptides], decreasing = T)[1:10])
+    peptides=names(perc[which(perc>percentage_threshold)])  ### select peptides based on percentage of finding in positive and negative class
+    peptides <- names(sort(all_counts[peptides], decreasing = T)[1:top_n_threshold])
     peptides_perc_list[[paste(allele,fld)]] <- names(peptides)
-    
+    p_peplist<-list()
+    for (row in p_rows) {
+      p_peplist[[rownames(data_fold[row,])]] <- colnames(data_fold[row,which(data_fold[row,]==1)])
+    }
+    n_peplist<-list()
+    for (row in p_rows) {
+      n_peplist[[rownames(data_fold[row,])]] <- colnames(data_fold[row,which(data_fold[row,]==1)])
+    }
+    python.load("auc_script.py")
+    auc_list[[paste(allele,fld)]] <- python.call("main", peptides, p_peplist, n_peplist, allele)
   }
 }
+
+
