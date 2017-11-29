@@ -4,6 +4,8 @@ library(caret)
 library(kernlab)
 library(RSQLite)
 
+
+#hallo
 options(stringsAsFactors = F)
 con = dbConnect(SQLite(), dbname='Projects/TumorSequencing/DB/TueDB.sqlite')
 myQuery <- dbSendQuery(con, "SELECT * FROM Class1")
