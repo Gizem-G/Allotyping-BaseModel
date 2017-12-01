@@ -56,35 +56,24 @@ def ROC (x, y):
 
 # # # Main # # # 
 
-def main(TOP, dict_peptide_positive, dict_peptide_negative, allele):            # Define all thresholds to be parsed
-    TPR, FPR = {},{}   
+def main(TOP, dict_peptide_positive, dict_peptide_negative, allele, n):            # Define all thresholds to be parsed
+ 
     Allele_Patients_positive = dict_peptide_positive.keys()
     Allele_Patients_negative = dict_peptide_negative.keys()
-    for n in range(1, len(TOP)+1):
-        TP, FN, FP, TN = 0, 0, 0, 0
-        for patient in dict_peptide_positive.keys():
-            sequences = dict_peptide_positive[patient] 
-            output = classify(allele,n,sequences, TOP)
-            TP_n, FN_n = evaluate_p(patient, Allele_Patients_positive, output)
-            TP += TP_n
-            FN += FN_n
-        for patient in dict_peptide_negative.keys():
-            sequences = dict_peptide_negative[patient] 
-            output = classify(allele,n,sequences, TOP)
-            FP_n, TN_n = evaluate_n(patient, Allele_Patients_negative, output)
-            TN += TN_n
-            FP += FP_n
+
+    TP, FN, FP, TN = 0, 0, 0, 0
+    for patient in dict_peptide_positive.keys():
+        sequences = dict_peptide_positive[patient] 
+        output = classify(allele,n,sequences, TOP)
+        TP_n, FN_n = evaluate_p(patient, Allele_Patients_positive, output)
+        TP += TP_n
+        FN += FN_n
+    for patient in dict_peptide_negative.keys():
+        sequences = dict_peptide_negative[patient] 
+        output = classify(allele,n,sequences, TOP)
+        FP_n, TN_n = evaluate_n(patient, Allele_Patients_negative, output)
+        TN += TN_n
+        FP += FP_n
         
-        TPR[n] = float(TP)/float((TP+FN))                                 # Gain n-dependent TPR and FPR as dictionary    
-        FPR[n] = 1- (float(TN)/float(TN+FP))
-
-    list_TPR = TPR.values()
-    list_FPR = FPR.values()
-
-    list_TPR += [0.0, 1.0]
-    list_FPR += [0.0, 1.0]
-    y = sorted(list_TPR)
-    x = sorted(list_FPR)
-    AUC = ROC(x,y)
-    return AUC  
+    return TP,FN,TN,FP
 
