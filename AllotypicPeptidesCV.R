@@ -111,7 +111,9 @@ shuffle<-sample(rep(1:length(label_matrix$A02), each=1))
 data_matrix=data_matrix[shuffle,]
 label_matrix=label_matrix[shuffle,]
 rownames(label_matrix)=rownames(data_matrix)
+
 flds<-createFolds(label_matrix$A01, k = 10, list = TRUE, returnTrain = FALSE)
+
 peptides_perc_list <- list()
 auc_list <- list()
 
@@ -134,6 +136,7 @@ for (allele in All_Allotypes){
   label_fold <- label_matrix[-unlist(fold),]
   label_cross_fold <- label_matrix[unlist(fold),]
   all_counts <- colSums(data_fold)
+
   tp_matrix=data.frame(matrix(0, ncol = top_n_threshold, nrow= length(flds)))
   fp_matrix=data.frame(matrix(0, ncol = top_n_threshold, nrow= length(flds)))
   tn_matrix=data.frame(matrix(0, ncol = top_n_threshold, nrow= length(flds)))
