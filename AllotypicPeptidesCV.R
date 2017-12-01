@@ -105,7 +105,7 @@ for (sample in names(total_sample_count)){
   counter <- counter + 1
 }
 
-###Run cross validation and generate peptide lists
+###Run cross validation and generate top_n peptide lists
 shuffle<-sample(rep(1:length(label_matrix$A02), each=1))
 data_matrix=data_matrix[shuffle,]
 label_matrix=label_matrix[shuffle,]
@@ -117,6 +117,7 @@ percentage_threshold <- 0.95
 top_n_threshold <- 10
 python.load("../Desktop/auc_script.py")
 
+#prepare peplist list with samples as keys and peptide vector as values
 peplist<-list()
 for (row in seq(1,nrow(data_matrix))) {
   print(paste0(row, "/", nrow(data_matrix)))
@@ -124,25 +125,26 @@ for (row in seq(1,nrow(data_matrix))) {
 }
 
 
-
 for (fld in names(flds)){
   print(fld)
-  fold<-flds[[fld]]
-  data_fold=data_matrix[-unlist(fold),]
-  label_fold=label_matrix[-unlist(fold),]
-  all_counts=colSums(data_fold)
+  fold <- flds[[fld]]
+  data_fold <- data_matrix[-unlist(fold),]
+  label_fold <- label_matrix[-unlist(fold),]
+  label_cross_fold <- label_matrix[unlist(fold),]
+  all_counts <- colSums(data_fold)
   for (allele in All_Allotypes){
     print(allele)
-    p_rows=which(label_fold[,allele]==1)
-    n_rows=which(label_fold[,allele]==0)
-    p_counts=colSums(data_fold[p_rows,])
-    #n_counts=colSums(data_fold[n_rows,])
-    perc=p_counts/all_counts
+    p_rows <- which(label_fold[,allele]==1)
+    n_rows <- which(label_fold[,allele]==0)
+    p_counts <- colSums(data_fold[p_rows,])
+    perc <- p_counts/all_counts
     peptides=names(perc[which(perc>percentage_threshold)])  ### select peptides based on percentage of finding in positive and negative class
     peptides <- names(sort(all_counts[peptides], decreasing = T)[1:top_n_threshold])
     peptides_perc_list[[paste(allele,fld)]] <- names(peptides)
-    p_peplist<-peplist[rownames(data_fold[p_rows,])]
-    n_peplist<-peplist[rownames(data_fold[n_rows,])]
+    p_rows <- which(label_cross_fold[,allele]==1)
+    n_rows <- which(label_cross_fold[,allele]==0)
+    p_peplist <- peplist[rownames(label_cross_fold[p_rows,])]
+    n_peplist <- peplist[rownames(label_cross_fold[n_rows,])]
     auc_list[[paste(allele,fld)]] <- python.call("main", peptides, p_peplist, n_peplist, allele)
   }
 }
