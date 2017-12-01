@@ -4,6 +4,7 @@ library(caret)
 library(kernlab)
 library(RSQLite)
 library(rPython)
+require(pracma)
 
 
 #Load sqlite db as dataframe
@@ -110,13 +111,15 @@ shuffle<-sample(rep(1:length(label_matrix$A02), each=1))
 data_matrix=data_matrix[shuffle,]
 label_matrix=label_matrix[shuffle,]
 rownames(label_matrix)=rownames(data_matrix)
-flds<-createFolds(label_matrix$A01, k = 3, list = TRUE, returnTrain = FALSE)
+
+flds<-createFolds(label_matrix$A01, k = 10, list = TRUE, returnTrain = FALSE)
+
 peptides_perc_list <- list()
 auc_list <- list()
 
 percentage_threshold <- 0.95
 top_n_threshold <- 10
-python.load("../Desktop/auc_script.py")
+python.load("Projects/AllotypicPeptides/Allotyping-BaseModel/auc_script.py")
 
 #prepare peplist list with samples as keys and peptide vector as values
 peplist<-list()
@@ -126,34 +129,49 @@ for (row in seq(1,nrow(data_matrix))) {
 }
 
 
-for (fld in names(flds)){
-  print(fld)
+for (allele in All_Allotypes){
+  print(allele)
   fold <- flds[[fld]]
   data_fold <- data_matrix[-unlist(fold),]
   label_fold <- label_matrix[-unlist(fold),]
   label_cross_fold <- label_matrix[unlist(fold),]
   all_counts <- colSums(data_fold)
-  for (allele in All_Allotypes){
-    print(allele)
-    p_rows <- which(label_fold[,allele]==1)
-    n_rows <- which(label_fold[,allele]==0)
-    p_counts <- colSums(data_fold[p_rows,])
-    perc <- p_counts/all_counts
-    peptides=names(perc[which(perc>percentage_threshold)])  ### select peptides based on percentage of finding in positive and negative class
-    peptides <- names(sort(all_counts[peptides], decreasing = T)[1:top_n_threshold])
-    peptides_perc_list[[paste(allele,fld)]] <- names(peptides)
-    p_rows <- which(label_cross_fold[,allele]==1)
-    n_rows <- which(label_cross_fold[,allele]==0)
-    p_peplist <- peplist[rownames(label_cross_fold[p_rows,])]
-    n_peplist <- peplist[rownames(label_cross_fold[n_rows,])]
-    if (any(is.na(names(p_peplist)))) {
-      p_peplist <- p_peplist[-which(is.na(names(p_peplist)))]
-    }
-    if (any(is.na(names(n_peplist)))) {
-      n_peplist <- n_peplist[-which(is.na(names(n_peplist)))]
-    }
-    auc_list[[paste(allele,fld)]] <- python.call("main", peptides, p_peplist, n_peplist, allele)
+
+  tp_matrix=data.frame(matrix(0, ncol = top_n_threshold, nrow= length(flds)))
+  fp_matrix=data.frame(matrix(0, ncol = top_n_threshold, nrow= length(flds)))
+  tn_matrix=data.frame(matrix(0, ncol = top_n_threshold, nrow= length(flds)))
+  fn_matrix=data.frame(matrix(0, ncol = top_n_threshold, nrow= length(flds)))
+  for (fld in names(flds)){
+      print(fld)
+      p_rows <- which(label_fold[,allele]==1)
+      n_rows <- which(label_fold[,allele]==0)
+      p_counts <- colSums(data_fold[p_rows,])
+      perc <- p_counts/all_counts
+      peptides=names(perc[which(perc>percentage_threshold)])  ### select peptides based on percentage of finding in positive and negative class
+      peptides <- names(sort(all_counts[peptides], decreasing = T)[1:top_n_threshold])
+      peptides_perc_list[[paste(allele,fld)]] <- names(peptides)
+      p_rows <- which(label_cross_fold[,allele]==1)
+      n_rows <- which(label_cross_fold[,allele]==0)
+      #if any(is.na(names(p_peplist))){}
+      p_peplist <- peplist[rownames(label_cross_fold[p_rows,])]
+      n_peplist <- peplist[rownames(label_cross_fold[n_rows,])]
+      for (n in seq(1, length(peptides))){
+        TPFNTNFP <- python.call("main", peptides, p_peplist, n_peplist, allele, n)
+        tp_matrix[which(names(flds)==fld),n]<-TPFNTNFP[1]
+        fn_matrix[which(names(flds)==fld),n]<-TPFNTNFP[2]
+        tn_matrix[which(names(flds)==fld),n]<-TPFNTNFP[3]
+        fp_matrix[which(names(flds)==fld),n]<-TPFNTNFP[4]
+      }
   }
+  TP=colSums(tp_matrix)
+  FP=colSums(fp_matrix)
+  TN=colSums(tn_matrix)
+  FN=colSums(fn_matrix)
+  TPR = TP/(TP+FN)  
+  FPR = 1-(TN/(TN+FP))
+  TPR=rev(c(1,TPR,0))
+  FPR=rev(c(1,FPR,0))
+  auc_list[[allele]]<-trapz(FPR,TPR)
 }
 
 
