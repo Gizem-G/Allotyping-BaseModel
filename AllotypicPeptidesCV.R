@@ -109,7 +109,8 @@ for (sample in names(total_sample_count)){
 shuffle<-sample(rep(1:length(label_matrix$A02), each=1))
 data_matrix=data_matrix[shuffle,]
 label_matrix=label_matrix[shuffle,]
-flds<-createFolds(label_matrix$A01, k = 10, list = TRUE, returnTrain = FALSE)
+rownames(label_matrix)=rownames(data_matrix)
+flds<-createFolds(label_matrix$A01, k = 3, list = TRUE, returnTrain = FALSE)
 peptides_perc_list <- list()
 auc_list <- list()
 
@@ -145,6 +146,12 @@ for (fld in names(flds)){
     n_rows <- which(label_cross_fold[,allele]==0)
     p_peplist <- peplist[rownames(label_cross_fold[p_rows,])]
     n_peplist <- peplist[rownames(label_cross_fold[n_rows,])]
+    if (any(is.na(names(p_peplist)))) {
+      p_peplist <- p_peplist[-which(is.na(names(p_peplist)))]
+    }
+    if (any(is.na(names(n_peplist)))) {
+      n_peplist <- n_peplist[-which(is.na(names(n_peplist)))]
+    }
     auc_list[[paste(allele,fld)]] <- python.call("main", peptides, p_peplist, n_peplist, allele)
   }
 }
