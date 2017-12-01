@@ -115,6 +115,15 @@ auc_list <- list()
 
 percentage_threshold <- 0.95
 top_n_threshold <- 10
+python.load("../Desktop/auc_script.py")
+
+peplist<-list()
+for (row in seq(1,nrow(data_matrix))) {
+  print(paste0(row, "/", nrow(data_matrix)))
+  peplist[[rownames(data_matrix[row,])]] <- colnames(data_matrix[row,which(data_matrix[row,]==1)])
+}
+
+
 
 for (fld in names(flds)){
   print(fld)
@@ -123,23 +132,17 @@ for (fld in names(flds)){
   label_fold=label_matrix[-unlist(fold),]
   all_counts=colSums(data_fold)
   for (allele in All_Allotypes){
+    print(allele)
     p_rows=which(label_fold[,allele]==1)
     n_rows=which(label_fold[,allele]==0)
     p_counts=colSums(data_fold[p_rows,])
-    n_counts=colSums(data_fold[n_rows,])
+    #n_counts=colSums(data_fold[n_rows,])
     perc=p_counts/all_counts
     peptides=names(perc[which(perc>percentage_threshold)])  ### select peptides based on percentage of finding in positive and negative class
     peptides <- names(sort(all_counts[peptides], decreasing = T)[1:top_n_threshold])
     peptides_perc_list[[paste(allele,fld)]] <- names(peptides)
-    p_peplist<-list()
-    for (row in p_rows) {
-      p_peplist[[rownames(data_fold[row,])]] <- colnames(data_fold[row,which(data_fold[row,]==1)])
-    }
-    n_peplist<-list()
-    for (row in p_rows) {
-      n_peplist[[rownames(data_fold[row,])]] <- colnames(data_fold[row,which(data_fold[row,]==1)])
-    }
-    python.load("auc_script.py")
+    p_peplist<-peplist[rownames(data_fold[p_rows,])]
+    n_peplist<-peplist[rownames(data_fold[n_rows,])]
     auc_list[[paste(allele,fld)]] <- python.call("main", peptides, p_peplist, n_peplist, allele)
   }
 }
