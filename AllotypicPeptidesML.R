@@ -5,12 +5,11 @@ library(kernlab)
 library(RSQLite)
 library(rPython)
 require(pracma)
-library(matlab)
 
 
 #Load sqlite db as dataframe
 options(stringsAsFactors = F)
-con = dbConnect(SQLite(), dbname='../Desktop/TueDB.sqlite')
+con = dbConnect(SQLite(), dbname='Projects/TumorSequencing/DB/TueDB.sqlite')
 myQuery <- dbSendQuery(con, "SELECT * FROM Class1")
 df <- dbFetch(myQuery, n = -1)
 
@@ -112,71 +111,28 @@ shuffle<-sample(rep(1:length(label_matrix$A02), each=1))
 data_matrix=data_matrix[shuffle,]
 label_matrix=label_matrix[shuffle,]
 rownames(label_matrix)=rownames(data_matrix)
-
-flds<-createFolds(label_matrix$A01, k = 10, list = TRUE, returnTrain = FALSE)
-
-peptides_perc_list <- list()
 auc_list <- list()
 
-percentage_threshold <- 0.95
-top_n_threshold <- 10
-python.load("../Desktop/Allotypic Peptides - Bachelorarbeit/Allotyping-BaseModel/auc_script.py")
-
-#prepare peplist list with samples as keys and peptide vector as values
-peplist<-list()
-for (row in seq(1,nrow(data_matrix))) {
-  print(paste0(row, "/", nrow(data_matrix)))
-  peplist[[rownames(data_matrix[row,])]] <- colnames(data_matrix[row,which(data_matrix[row,]==1)])
-}
+fitControl <- trainControl(method = "repeatedcv",
+                           ## 10-fold CV...
+                           number = 10,
+                           classProbs = TRUE,
+                           ## repeated ten times
+                           repeats = 10,
+                           summaryFunction = twoClassSummary)
 
 
 for (allele in All_Allotypes){
-  print(allele)
-  tp_matrix=data.frame(matrix(0, ncol = top_n_threshold, nrow= length(flds)))
-  fp_matrix=data.frame(matrix(0, ncol = top_n_threshold, nrow= length(flds)))
-  tn_matrix=data.frame(matrix(0, ncol = top_n_threshold, nrow= length(flds)))
-  fn_matrix=data.frame(matrix(0, ncol = top_n_threshold, nrow= length(flds)))
-  for (fld in names(flds)){
-      print(fld)
-      fold <- flds[[fld]]
-      data_fold <- data_matrix[-unlist(fold),]
-      label_fold <- label_matrix[-unlist(fold),]
-      label_cross_fold <- label_matrix[unlist(fold),]
-      all_counts <- colSums(data_fold)
-      p_rows <- which(label_fold[,allele]==1)
-      n_rows <- which(label_fold[,allele]==0)
-      p_counts <- colSums(data_fold[p_rows,])
-      perc <- p_counts/all_counts
-      peptides=names(perc[which(perc>percentage_threshold)])  ### select peptides based on percentage of finding in positive and negative class
-      peptides <- names(sort(all_counts[peptides], decreasing = T)[1:top_n_threshold])
-      peptides_perc_list[[paste(allele,fld)]] <- names(peptides)
-      p_rows <- which(label_cross_fold[,allele]==1)
-      n_rows <- which(label_cross_fold[,allele]==0)
-      p_peplist <- peplist[rownames(label_cross_fold[p_rows,])]
-      n_peplist <- peplist[rownames(label_cross_fold[n_rows,])]
-      if (any(is.na(names(p_peplist)))){
-        p_peplist<-p_peplist[-which(is.na(names(p_peplist)))]
-      }
-      if (any(is.na(names(n_peplist)))){
-        n_peplist<-n_peplist[-which(is.na(names(n_peplist)))]
-      }
-      for (n in seq(1, length(peptides))){
-        TPFNTNFP <- python.call("main", peptides, p_peplist, n_peplist, allele, n)
-        tp_matrix[which(names(flds)==fld),n]<-TPFNTNFP[1]
-        fn_matrix[which(names(flds)==fld),n]<-TPFNTNFP[2]
-        tn_matrix[which(names(flds)==fld),n]<-TPFNTNFP[3]
-        fp_matrix[which(names(flds)==fld),n]<-TPFNTNFP[4]
-      }
-  }
-  TP=colSums(tp_matrix)
-  FP=colSums(fp_matrix)
-  TN=colSums(tn_matrix)
-  FN=colSums(fn_matrix)
-  TPR = TP/(TP+FN)  
-  FPR = 1-(TN/(TN+FP))
-  TPR=rev(c(1,TPR,0))
-  FPR=rev(c(1,FPR,0))
-  auc_list[[allele]]<-trapz(FPR,TPR)
+  ###caret, kernlab packages Train random forrest on selected peptides
+  TrainData <- as.data.frame(data_matrix[,names(total_peptide_count)])
+  TrainClasses <- as.character(label_matrix[[allele]])
+  TrainClasses <- sapply(TrainClasses,function(x) {gsub(x,pattern = "1", replacement = "ClassI")})
+  TrainClasses <- as.factor(as.vector(sapply(TrainClasses,function(x) {gsub(x,pattern = "0", replacement = "Class2")})))
+  Training <- train(x=TrainData, y=TrainClasses, 
+                 method = "cforest", 
+                 preProc = c("center"),
+                 trControl = fitControl, metric = "ROC")
+  auc_list[[allele]]<-Training
 }
 
 
