@@ -15,7 +15,7 @@ df <- dbFetch(myQuery, n = -1)
 
 ###Load and clean database
 #df=read.csv("Projects/TumorSequencing/DB/TueDB_ClassI.csv", sep = ",")
-df = df[c('Sequence','HLA','HLA_A1','HLA_A2','HLA_B1','HLA_B2','HLA_C1','HLA_C2','Dignity','Patient..Donor')]
+df = df[c('Sequence','HLA','HLA_A1','HLA_A2','HLA_B1','HLA_B2','HLA_C1','HLA_C2','Dignity','Patient..Donor','Comment')]
 df['HLA_A1'] <- sapply(df[,'HLA_A1'], function(x){gsub(x=strsplit(x=x, split = ":", fixed = T)[[1]][1], pattern = "*", replacement = "", fixed = T)})
 df['HLA_A2'] <- sapply(df[,'HLA_A2'], function(x){gsub(x=strsplit(x=x, split = ":", fixed = T)[[1]][1], pattern = "*", replacement = "", fixed = T)})
 df['HLA_B1'] <- sapply(df[,'HLA_B1'], function(x){gsub(x=strsplit(x=x, split = ":", fixed = T)[[1]][1], pattern = "*", replacement = "", fixed = T)})
@@ -40,7 +40,8 @@ df[which(df[,'HLA_B1']=="A66"|df[,'HLA_B2']=="A66"),] <- NA
 df=na.omit(df)
 df$Dignity <- paste(df$Patient..Donor,df$Dignity)
 df['Sequence']<-sapply(df['Sequence'], toupper)
-
+forbidden_comments<-c('')
+df<-df[-is.element(df$Comment,forbidden_comments),]
 
 ###Define Allotypes to differenciate
 allele_count_threshold<-9
@@ -112,6 +113,14 @@ data_matrix=data_matrix[shuffle,]
 label_matrix=label_matrix[shuffle,]
 rownames(label_matrix)=rownames(data_matrix)
 
+### split test, train set and k-folds
+set.seed(999)
+TestSet <- sample(1:dim(data_matrix)[1], 55)
+data_test <- data_matrix[TestSet,]
+label_test <- label_matrix[TestSet,]
+#write.csv(as.data.frame(data_test),file = 'data_test.csv')
+#write.csv(as.data.frame(label_test),file = 'label_test.csv')
+data_matrix <- data_matrix[-TestSet,]
 flds<-createFolds(label_matrix$A01, k = 10, list = TRUE, returnTrain = FALSE)
 
 peptides_perc_list <- list()
