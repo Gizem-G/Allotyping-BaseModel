@@ -5,11 +5,12 @@ library(kernlab)
 library(RSQLite)
 library(rPython)
 require(pracma)
+library(matlab)
 
 
 #Load sqlite db as dataframe
 options(stringsAsFactors = F)
-con = dbConnect(SQLite(), dbname='Projects/TumorSequencing/DB/TueDB.sqlite')
+con = dbConnect(SQLite(), dbname='../Desktop/TueDB.sqlite')
 myQuery <- dbSendQuery(con, "SELECT * FROM Class1")
 df <- dbFetch(myQuery, n = -1)
 
@@ -119,7 +120,7 @@ auc_list <- list()
 
 percentage_threshold <- 0.95
 top_n_threshold <- 10
-python.load("Projects/AllotypicPeptides/Allotyping-BaseModel/auc_script.py")
+python.load("../Desktop/Allotypic Peptides - Bachelorarbeit/Allotyping-BaseModel/auc_script.py")
 
 #prepare peplist list with samples as keys and peptide vector as values
 peplist<-list()
